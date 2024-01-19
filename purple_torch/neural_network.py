@@ -1,53 +1,96 @@
 import matplotlib.pyplot as plt
+import torch
 
 from torch import nn
 
+
 class NeuralNetwork(nn.Module):
-    def __init__(self, layers: dict):
+    """ A empty nn.Module class. """
+
+    def __init__(
+            self,
+            sequential_layers: nn.Sequential,
+            initializer: nn.init = None
+    ):
         """ Initializes a torch module
+
         Args:
-            layers : dict[str: nn.*]
-                A dictionary of torch nn layers, as values, and layer
-                descriptions as the keys.
-        
+            layers : nn.Sequential
+                A sequence of torch layers
+            initializer : nn.init
+                A custom weight initializer, using the a set
+                of nn.init functions. Default None.
         """
         super().__init__()
-        self.layers = nn.ModuleDict(layers)
-        self.layer_keys = list(self.layers.keys())
-        self.layer_means = {layer_key: [] for layer_key in self.layer_keys}
-        self.layer_stds = {layer_key: [] for layer_key in self.layer_keys}
-        
-        
-    def forward(self, x):
-        """A forward pass on the netowrk. Stores, the layer means and stds.
+        self.layers = sequential_layers
+        self.initializer = initializer
+        self.n_layers = len(self.layers)
+        self.layer_names = [
+            '{} - {}'.format(
+                i+1, name.__class__.__name__
+            ) for i, name in enumerate(self.layers)
+        ]
+        self.layer_means = [[] for _ in self.layers]
+        self.layer_stds = [[] for _ in self.layers]
+
+    def forward(self, input_x: torch.Tensor):
+        """Forward pass on the network, also stored means
+        and standard deviations of the laters.
 
         Args:
-            x (torch.tensor): Input tensor.
+            x: Torch.tensor
 
-        Returns:
-            torch.tensor: Output after a full pass in the network.
+        Returns: Torch.tensor
         """
-        for layer_key, layer_value in self.layers.items():
-            x = self.layers[layer_key](x)
+        for i, _ in enumerate(self.layers):
+            input_x = self.layers[i](input_x)
             # each element represents a pass
-            self.layer_means[layer_key].append(x.mean().item())
-            self.layer_stds[layer_key].append(x.std().item())
-            
-        return x
-    
+            self.layer_means[i].append(input_x.mean().item())
+            self.layer_stds[i].append(input_x.std().item())
+
+        return input_x
+
     def plot_layer_means(self):
-        for layer_key in self.layer_keys:
-            plt.plot(self.layer_means.get(layer_key))
-        plt.legend(self.layer_keys, loc=(1.04, 0))
+        """Returns a plot of the means for each layers for
+        each pass of the data.
+
+        Returns: None
+
+        """
+        for mean in self.layer_means:
+            plt.plot(mean)
+        plt.legend(self.layer_names, loc=(1.04, 0))
         plt.xlabel('Pass Number')
         plt.ylabel('Mean')
         plt.title('Means')
-        
-        
+
     def plot_layer_stds(self):
-        for layer_key in self.layer_keys:
-            plt.plot(self.layer_stds.get(layer_key))
-        plt.legend(self.layer_keys, loc=(1.04, 0))
+        """Returns a plot of standard deviations for each
+        layer for each pass of the data.
+
+        Returns: None
+
+        """
+        for std in self.layer_stds:
+            plt.plot(std)
+        plt.legend(self.layer_names, loc=(1.04, 0))
         plt.xlabel('Pass Number')
         plt.ylabel('Std')
         plt.title('Standard Deviations')
+
+    def _initialize_weights(self):
+        """Applies an initializer to torch.nn layers. Checks and passes
+        activiation and matrix transformation layers
+
+        Returns:
+            None
+        """
+        skip_list = (
+            nn.ReLU,
+            nn.Sigmoid,
+            nn.Flatten,
+            nn.UpsamplingNearest2d,
+        )
+        for layer in self.layers:
+            if not isinstance(layer, skip_list):
+                self.initializer(layer.weight)
